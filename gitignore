@@ -1,0 +1,41 @@
+# .NET build artifacts
+bin/
+obj/
+out/
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Rider / JetBrains
+.idea/
+*.iml
+
+# Build outputs
+publish/
+dist/
+
+# Environment
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# Logs and caches
+logs/
+.cache/

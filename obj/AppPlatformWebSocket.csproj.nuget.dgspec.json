@@ -1,0 +1,74 @@
+{
+  "format": 1,
+  "restore": {
+    "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/AppPlatformWebSocket.csproj": {}
+  },
+  "projects": {
+    "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/AppPlatformWebSocket.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/AppPlatformWebSocket.csproj",
+        "projectName": "AppPlatformWebSocket",
+        "projectPath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/AppPlatformWebSocket.csproj",
+        "packagesPath": "/home/wanderson-silva/.nuget/packages/",
+        "outputPath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/wanderson-silva/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Swashbuckle.AspNetCore": {
+              "target": "Package",
+              "version": "[9.0.6, )"
+            },
+            "Swashbuckle.AspNetCore.Annotations": {
+              "target": "Package",
+              "version": "[9.0.6, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.AspNetCore.App": {
+              "privateAssets": "none"
+            },
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.121/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

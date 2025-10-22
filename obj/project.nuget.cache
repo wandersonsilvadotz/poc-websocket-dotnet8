@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "dgSpecHash": "2H3F3bPVyzfwuevemgDYKcRAf3rTw67jk6nUGqdlDHxNckW1d1uU7ohe6TIEaFTLfm1wR0j2/nBwSNbGkigPwA==",
+  "success": true,
+  "projectFilePath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/AppPlatformWebSocket.csproj",
+  "expectedPackageFiles": [
+    "/home/wanderson-silva/.nuget/packages/microsoft.extensions.apidescription.server/8.0.0/microsoft.extensions.apidescription.server.8.0.0.nupkg.sha512",
+    "/home/wanderson-silva/.nuget/packages/microsoft.openapi/1.6.25/microsoft.openapi.1.6.25.nupkg.sha512",
+    "/home/wanderson-silva/.nuget/packages/swashbuckle.aspnetcore/9.0.6/swashbuckle.aspnetcore.9.0.6.nupkg.sha512",
+    "/home/wanderson-silva/.nuget/packages/swashbuckle.aspnetcore.annotations/9.0.6/swashbuckle.aspnetcore.annotations.9.0.6.nupkg.sha512",
+    "/home/wanderson-silva/.nuget/packages/swashbuckle.aspnetcore.swagger/9.0.6/swashbuckle.aspnetcore.swagger.9.0.6.nupkg.sha512",
+    "/home/wanderson-silva/.nuget/packages/swashbuckle.aspnetcore.swaggergen/9.0.6/swashbuckle.aspnetcore.swaggergen.9.0.6.nupkg.sha512",
+    "/home/wanderson-silva/.nuget/packages/swashbuckle.aspnetcore.swaggerui/9.0.6/swashbuckle.aspnetcore.swaggerui.9.0.6.nupkg.sha512"
+  ],
+  "logs": []
+}

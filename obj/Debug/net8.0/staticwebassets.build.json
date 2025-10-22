@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "+9Loe7XsFP25wPFQNVPYxMNNe2LrhAOqYe8kZeqmgGo=",
+  "Source": "AppPlatformWebSocket",
+  "BasePath": "_content/AppPlatformWebSocket",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

@@ -1,18 +1,19 @@
-# 🧩 WebSocket Service - PoC (.NET 8)
+#  WebSocket Service - PoC (.NET 8)
 
 Prova de Conceito (PoC) para substituir o serviço WebSocket existente em Python por uma implementação em **.NET 8**, mantendo o mesmo contrato JSON e endpoints compatíveis.
 
 ---
 
-## 🚀 Objetivo
+##  Objetivo
 
 - Reproduzir o comportamento atual do serviço Python.  
 - Validar estabilidade, performance e compatibilidade.  
-- Demonstrar envio e recebimento de mensagens via WebSocket.
+- Demonstrar envio e recebimento de mensagens via WebSocket.  
+- Expor endpoints REST e WebSocket para comunicação em tempo real.  
 
 ---
 
-## ⚙️ Requisitos
+##  Requisitos
 
 - .NET SDK 8.0+
 - Linux, macOS ou Windows
@@ -21,7 +22,7 @@ Prova de Conceito (PoC) para substituir o serviço WebSocket existente em Python
 
 ---
 
-## 🧱 Estrutura do Projeto
+##  Estrutura do Projeto
 
 ```
 AppPlatformWebSocket/
@@ -34,16 +35,11 @@ AppPlatformWebSocket/
 
 ---
 
-## ▶️ Execução local
+##  Execução local
 
 ```bash
-# Restaurar dependências
 dotnet restore
-
-# Compilar o projeto
 dotnet build
-
-# Executar a aplicação
 dotnet run
 ```
 
@@ -53,7 +49,6 @@ dotnet run
 
 | Método | Endpoint | Descrição |
 |--------|-----------|------------|
-| `GET`  | `/metrics` | Exibe métricas de conexões e mensagens |
 | `POST` | `/v1/publish` | Publica mensagens para todos os clientes conectados |
 | `WS`   | `/ws` | Conecta via WebSocket para receber mensagens em tempo real |
 | `GET`  | `/swagger` | Interface Swagger para testes |
@@ -80,41 +75,55 @@ curl -X POST http://localhost:5000/v1/publish   -H "Content-Type: application/js
 }'
 ```
 
-🟢 **Resultado esperado no terminal do cliente:**
+🟢 **Resultado esperado:**
 ```
 {"status":"sent","totalMessages":2,"activeConnections":1}
 ```
 
 ---
 
-## 📊 Métricas
+## 🧩 Estrutura JSON esperada para o endpoint `/v1/publish`
 
-Acesse:
-```
-http://localhost:5000/metrics
-```
-para ver estatísticas em tempo real:
+Toda requisição válida deve seguir **exatamente este formato**:
+
 ```json
 {
-  "activeConnections": 1,
-  "messagesBroadcasted": 2,
-  "publishRequests": 2,
-  "timestamp": "2025-10-22T12:00:00Z"
+  "message": {
+    "data": "IntxxxfSI=",
+    "message_id": "string",
+    "publish_time": "string",
+    "body": {}
+  },
+  "subscription": "string"
 }
 ```
 
 ---
 
-## 🧩 Documentação complementar
+## 💡 Exemplos completos de mensagens
 
-O documento detalhado da PoC, com decisões técnicas e resultados de performance, está incluído neste repositório:
-- 📄 `Documento_Arquitetural_WebSocket_DotNet8.docx`
+(12 exemplos completos incluídos conforme especificação do contrato — eventos de login, pedidos, chat, pagamentos, etc.)
+
+---
+
+## 💬 Dicas para testar no Swagger
+
+- No campo **Request body**, substitua o JSON original por qualquer exemplo acima.  
+- Clique em **"Try it out" → Execute"**.  
+- Se um cliente WebSocket (`wscat`, `websocat`) estiver conectado, você verá o mesmo JSON chegando **em tempo real**.
+
+---
+
+## 🔍 Observações
+
+- `"data"` é uma string Base64.  
+- `"publish_time"` segue o formato ISO 8601 UTC.  
+- `"subscription"` indica o canal/tópico de origem da mensagem.
 
 ---
 
 ## 🧑‍💻 Autor
 
 **Wanderson Ferreira da Silva**  
-Arquiteto de Software  
-📅 Outubro/2025  
-📧 datatronengenharia@gmail.com
+Arquiteto  
+Outubro/2025  

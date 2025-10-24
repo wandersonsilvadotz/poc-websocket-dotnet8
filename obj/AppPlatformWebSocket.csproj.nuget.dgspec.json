@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/AppPlatformWebSocket.csproj": {}
+    "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/AppPlatformWebSocket.csproj": {}
   },
   "projects": {
-    "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/AppPlatformWebSocket.csproj": {
+    "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/AppPlatformWebSocket.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/AppPlatformWebSocket.csproj",
+        "projectUniqueName": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/AppPlatformWebSocket.csproj",
         "projectName": "AppPlatformWebSocket",
-        "projectPath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/AppPlatformWebSocket.csproj",
+        "projectPath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/AppPlatformWebSocket.csproj",
         "packagesPath": "/home/wanderson-silva/.nuget/packages/",
-        "outputPath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket/obj/",
+        "outputPath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/wanderson-silva/.nuget/NuGet/NuGet.Config"
@@ -38,13 +38,25 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "Elastic.Apm.NetCoreAll": {
+              "target": "Package",
+              "version": "[1.34.1, )"
+            },
+            "StackExchange.Redis": {
+              "target": "Package",
+              "version": "[2.7.33, )"
+            },
             "Swashbuckle.AspNetCore": {
               "target": "Package",
-              "version": "[9.0.6, )"
+              "version": "[6.5.0, )"
             },
             "Swashbuckle.AspNetCore.Annotations": {
               "target": "Package",
-              "version": "[9.0.6, )"
+              "version": "[6.5.0, )"
+            },
+            "System.IdentityModel.Tokens.Jwt": {
+              "target": "Package",
+              "version": "[7.1.2, )"
             }
           },
           "imports": [

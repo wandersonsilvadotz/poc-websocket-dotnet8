@@ -1,24 +1,27 @@
-# WebSocket Service - PoC (.NET 8)
 
-Prova de Conceito (PoC) para substituir o serviço WebSocket existente em Python por uma implementação em **.NET 8**, mantendo o mesmo contrato JSON e endpoints compatíveis.
+# WebSocket Service - PoC (.NET 8) - Versão 2
+
+Prova de Conceito (PoC) para evoluir o serviço WebSocket desenvolvido em **.NET 8**, incorporando **autenticação JWT**, **backplane Redis**, **métricas operacionais**, **rastreamento de mensagens (TraceId)** e **filtragem por canal (subscriptions)**.  
+Esta versão mantém compatibilidade total com o contrato JSON do legado em Python.
 
 ---
 
 ## Objetivo
 
-- Reproduzir o comportamento atual do serviço Python.  
-- Validar estabilidade, performance e compatibilidade.  
-- Demonstrar envio e recebimento de mensagens via WebSocket.  
-- Expor endpoints REST e WebSocket para comunicação em tempo real.  
-- Fornecer métricas de execução e estado do servidor WebSocket.
+- Adicionar autenticação JWT nas conexões WebSocket.  
+- Implementar Redis como backplane para comunicação entre múltiplas instâncias.  
+- Expor métricas operacionais e registros de entrega via endpoints dedicados.  
+- Permitir rastreabilidade ponta a ponta com `TraceId` e integração com Elastic APM.  
+- Validar isolamento de mensagens por canal (`subscriptions`) usando tokens diferentes.  
 
 ---
 
 ## Requisitos
 
-- .NET SDK 8.0+
-- Linux, macOS ou Windows
-- cURL (para testes HTTP)
+- .NET SDK 8.0+  
+- Linux, macOS ou Windows  
+- Redis (opcional — modo local ou via Docker)  
+- cURL e `jq` (para testes HTTP)  
 - `websocat` ou `wscat` (para testes WebSocket)
 
 ---
@@ -26,12 +29,23 @@ Prova de Conceito (PoC) para substituir o serviço WebSocket existente em Python
 ## Estrutura do Projeto
 
 ```
-AppPlatformWebSocket/
+AppPlatformWebSocket_v2/
 ├── Program.cs
 ├── Models/
+│   ├── ClientAck.cs
+│   └── PublishMessage.cs
 ├── Services/
-├── AppPlatformWebSocket.csproj
-└── appsettings.json
+│   ├── WebSocketDispatcher.cs
+│   ├── WebSocketConnectionManager.cs
+│   ├── RedisService.cs
+│   ├── DeliveryRecord.cs
+│   ├── ClientAckStore.cs
+│   ├── JwtValidator.cs
+│   ├── MetricsService.cs
+│   └── DeliveryStore.cs
+├── appsettings.json
+├── gitignore
+└── README.md
 ```
 
 ---
@@ -44,79 +58,50 @@ dotnet build
 dotnet run
 ```
 
-O servidor será iniciado localmente (por padrão) em `http://localhost:5000`.
+O servidor iniciará (por padrão) em `http://localhost:5087`.
 
 ---
 
 ## Endpoints disponíveis
 
-| Método | Endpoint      | Descrição                                                 |
-|-------:|---------------|-----------------------------------------------------------|
-|   POST | `/v1/publish` | Publica mensagens para todos os clientes conectados       |
-|     WS | `/ws`         | Conecta via WebSocket para receber mensagens em tempo real|
-|    GET | `/metrics`    | Exibe estatísticas atuais do servidor e das conexões      |
-|    GET | `/swagger`    | Interface Swagger para testes e documentação              |
+| Método | Endpoint        | Descrição                                                                 |
+|-------:|-----------------|---------------------------------------------------------------------------|
+|   POST | `/v1/publish`   | Publica mensagem no canal especificado                                   |
+|     WS | `/ws?token=JWT` | Conecta cliente autenticado por JWT; envia/recebe mensagens em tempo real |
+|    GET | `/metrics`      | Exibe métricas operacionais do serviço                                   |
+|    GET | `/deliveries`   | Lista registros de entregas realizadas                                   |
+|    GET | `/acks`         | Exibe confirmações (ACK) recebidas dos clientes                          |
+|    GET | `/clients`      | Lista conexões WebSocket ativas e seus claims                            |
+|    GET | `/swagger`      | Interface Swagger para testes e documentação                             |
 
 ---
 
-## Detalhes do endpoint `/metrics`
+## Exemplo de autenticação JWT
 
-Endpoint de diagnóstico para monitorar o status do serviço WebSocket.  
-Fornece informações básicas sobre conexões e mensagens processadas.
+O cliente deve se conectar com o token JWT na querystring:
 
-Exemplo de requisição:
 ```bash
-curl http://localhost:5000/metrics
+websocat "ws://localhost:5087/ws?token=<JWT>"
 ```
 
-Exemplo de resposta:
+**Token exemplo (usuário com acesso aos canais `chat` e `user-events`):**
+
 ```json
 {
-  "activeConnections": 1,
-  "messagesBroadcasted": 2,
-  "publishRequests": 2,
-  "timestamp": "2025-10-22T12:00:00Z"
+  "sub": "user-123",
+  "role": "client",
+  "subscriptions": ["chat", "user-events"],
+  "iss": "https://issuer.example.com",
+  "aud": "app-client",
+  "exp": 1761405576
 }
-```
-
-Campos:
-- `activeConnections`: número de conexões WebSocket ativas no momento.  
-- `messagesBroadcasted`: total de mensagens enviadas via broadcast desde o start.  
-- `publishRequests`: total de requisições recebidas em `/v1/publish` desde o start.  
-- `timestamp`: horário da coleta dos dados no formato ISO 8601 UTC.
-
----
-
-## Teste rápido
-
-Conectar via WebSocket:
-```bash
-websocat ws://localhost:5000/ws
-```
-
-Publicar mensagem:
-```bash
-curl -X POST http://localhost:5000/v1/publish   -H "Content-Type: application/json"   -d '{
-  "message": {
-    "data": "SGVsbG8sIFdlYlNvY2tldCE=",
-    "message_id": "msg-001",
-    "publish_time": "2025-10-21T12:00:00Z",
-    "body": {"event": "user_connected"}
-  },
-  "subscription": "app-notifications"
-}'
-```
-
-Resposta esperada do endpoint HTTP:
-```json
-{"status":"sent","totalMessages":2,"activeConnections":1}
 ```
 
 ---
 
 ## Estrutura JSON obrigatória para o endpoint `/v1/publish`
 
-Toda requisição válida deve seguir exatamente este formato, alterando apenas os valores:
+Toda requisição válida deve seguir este formato (alterando apenas os valores):
 
 ```json
 {
@@ -132,94 +117,121 @@ Toda requisição válida deve seguir exatamente este formato, alterando apenas 
 
 Observações:
 - `data` é uma string Base64.  
-- `publish_time` segue o padrão ISO 8601 UTC (ex.: `"2025-10-21T13:00:00Z"`).  
-- `subscription` indica o canal/tópico (ex.: `user-events`, `commerce`, `monitoring`).
+- `publish_time` usa formato ISO 8601 UTC.  
+- `subscription` indica o canal (ex.: `chat`, `user-events`, `monitoring`).  
 
 ---
 
-## Exemplos completos de mensagens (3 exemplos)
+## Exemplos completos de mensagens
 
-Use qualquer um dos exemplos abaixo diretamente no Swagger, Postman ou via `curl` para o endpoint `/v1/publish`.
-
-### 1) Evento de login de usuário
+### 1) Mensagem no canal “chat”
 ```json
 {
   "message": {
-    "data": "VXNlcjogSm9hbw==",
-    "message_id": "msg-1001",
-    "publish_time": "2025-10-21T13:00:00Z",
+    "data": "Q2hhbm5lbCBjaGF0",
+    "message_id": "msg-chat-001",
+    "publish_time": "2025-10-26T12:00:00Z",
+    "body": {
+      "event": "chat_message",
+      "sender": "user123",
+      "text": "Mensagem exclusiva do canal chat"
+    }
+  },
+  "subscription": "chat"
+}
+```
+
+### 2) Mensagem no canal “user-events”
+```json
+{
+  "message": {
+    "data": "dXNlciBsb2dpbg==",
+    "message_id": "msg-user-001",
+    "publish_time": "2025-10-26T12:02:00Z",
     "body": {
       "event": "user_login",
-      "user_id": "u784",
-      "device": "android",
-      "location": "São Paulo, BR"
+      "user_id": "u456",
+      "platform": "mobile"
     }
   },
   "subscription": "user-events"
 }
 ```
 
-### 2) Criação de pedido
+### 3) Mensagem com ACK (canal chat)
 ```json
 {
   "message": {
-    "data": "T3JkZXIgY3JlYXRlZA==",
-    "message_id": "msg-1002",
-    "publish_time": "2025-10-21T13:10:00Z",
+    "data": "YWNrbWVzc2FnZQ==",
+    "message_id": "msg-ack-01",
+    "publish_time": "2025-10-26T12:15:00Z",
     "body": {
-      "event": "order_created",
-      "order_id": "o937",
-      "user_id": "u111",
-      "items": [
-        { "id": "p10", "name": "Mouse Gamer", "quantity": 1 },
-        { "id": "p12", "name": "Teclado Mecânico", "quantity": 1 }
-      ],
-      "total": 399.90
+      "event": "requires_ack",
+      "description": "Mensagem que exige confirmação"
     }
   },
-  "subscription": "commerce"
-}
-```
-
-### 3) Alerta de sistema
-```json
-{
-  "message": {
-    "data": "U3lzdGVtIGFsZXJ0",
-    "message_id": "msg-1006",
-    "publish_time": "2025-10-21T13:40:00Z",
-    "body": {
-      "event": "system_alert",
-      "level": "warning",
-      "code": "MEMORY_HIGH",
-      "description": "Uso de memória acima de 80% detectado",
-      "server": "ws-node-02"
-    }
-  },
-  "subscription": "monitoring"
+  "subscription": "chat"
 }
 ```
 
 ---
 
-## Dicas para testar no Swagger
+## Exemplo de resposta do endpoint `/metrics`
 
-- No campo Request body do endpoint `/v1/publish`, substitua o JSON pelo de qualquer exemplo acima.  
-- Clique em “Try it out” e depois em “Execute”.  
-- Se um cliente WebSocket estiver conectado ao `/ws`, verá o mesmo JSON chegar em tempo real.
+```bash
+curl http://localhost:5087/metrics | jq .
+```
+
+Resposta esperada:
+```json
+{
+  "activeConnections": 2,
+  "messagesBroadcasted": 7,
+  "publishRequests": 7,
+  "timestamp": "2025-10-26T14:20:00Z"
+}
+```
 
 ---
 
-## Observações
+## Observabilidade e rastreabilidade (TraceId)
 
-- O contrato foi mantido fiel ao legado: `/v1/publish` para entrada HTTP e `/ws` para entrega WebSocket.  
-- O endpoint `/metrics` expõe métricas básicas para observabilidade local e pode ser evoluído (Prometheus/OpenTelemetry).  
-- A PoC não implementa autenticação nem backplane; essas funcionalidades fazem parte do plano evolutivo.
+- Cada publicação gera ou propaga um campo `TraceId`.  
+- Logs e spans podem ser coletados via Elastic APM.  
+- O endpoint `/deliveries` registra cada mensagem entregue:  
+  ```json
+  {
+    "connectionId": "a1b2c3d4e5",
+    "messageId": "msg-chat-001",
+    "deliveredAtUtc": "2025-10-26T14:20:11Z"
+  }
+  ```
+
+---
+
+## Riscos e Mitigações
+
+| Risco | Impacto | Mitigação |
+|-------|----------|-----------|
+| Redis fora do ar | Mensagens não replicadas entre instâncias | Fallback local e retry automático |
+| JWT inválido | Falha na autenticação | Gerar tokens válidos com mesmo segredo do servidor |
+| Alta carga simultânea | Possível degradação de desempenho | Ajustar thread pool e buffers WebSocket |
+| Logs não centralizados | Dificuldade de diagnóstico | Integrar Elastic APM e centralizar observabilidade |
+
+---
+
+## Observações Finais
+
+- O contrato JSON foi mantido conforme o legado em Python.  
+- Redis é essencial para escalabilidade horizontal.  
+- JWT garante isolamento de mensagens por canal (`subscriptions`).  
+- `/metrics`, `/deliveries`, `/acks` e `/clients` oferecem visibilidade operacional.  
+- A PoC está pronta para ambiente **staging** e migração futura para produção.
 
 ---
 
 ## Autor
 
-Wanderson Ferreira da Silva  
+**Wanderson Ferreira da Silva**  
 Arquiteto  
 Outubro/2025

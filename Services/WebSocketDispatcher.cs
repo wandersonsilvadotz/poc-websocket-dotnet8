@@ -44,6 +44,39 @@ public class WebSocketDispatcher
         _deliveryStore = deliveryStore;
         _logger = logger;
     }
+    //Unicast por usuário (fan-out para todas as conexões do mesmo userId)
+public async Task SendToUserAsync(string userId, PublishMessage msg, CancellationToken ct = default)
+    {
+        var span = Agent.Tracer.CurrentTransaction?.StartSpan("WS-Unicast", "websocket");
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(msg.TraceId)) span?.SetLabel("trace.id", msg.TraceId);
+
+            var json = JsonSerializer.Serialize(msg);
+            var payload = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
+            var conns = _connMgr.GetConnectionsByUser(userId);
+
+            foreach (var (connId, socket) in conns)
+            {
+                if (socket.State != WebSocketState.Open) continue;
+
+                try
+                {
+                    await socket.SendAsync(payload, WebSocketMessageType.Text, true, ct);
+                    _deliveryStore.Add(new DeliveryRecord(connId, msg.Message?.MessageId, DateTime.UtcNow));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Falha ao enviar unicast para conexão {Id}. Removendo socket.", connId);
+                    await _connMgr.RemoveSocketAsync(connId);
+                }
+            }
+        }
+        finally
+        {
+            span?.End();
+        }
+    }
 
     public async Task BroadcastAsync(PublishMessage msg, CancellationToken ct = default)
     {
@@ -52,7 +85,7 @@ public class WebSocketDispatcher
         try
         {
             if (!string.IsNullOrWhiteSpace(msg.TraceId))
-            span?.SetLabel("trace.id", msg.TraceId);
+                span?.SetLabel("trace.id", msg.TraceId);
             var json = JsonSerializer.Serialize(msg);
             var bytes = Encoding.UTF8.GetBytes(json);
             var segment = new ArraySegment<byte>(bytes);

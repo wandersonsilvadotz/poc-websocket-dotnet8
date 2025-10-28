@@ -1,56 +1,54 @@
+# WebSocket Service - PoC (.NET 8) - Versão 3
 
-# WebSocket Service - PoC (.NET 8) - Versão 2
-
-Prova de Conceito (PoC) para evoluir o serviço WebSocket desenvolvido em **.NET 8**, incorporando **autenticação JWT**, **backplane Redis**, **métricas operacionais**, **rastreamento de mensagens (TraceId)** e **filtragem por canal (subscriptions)**.  
-Esta versão mantém compatibilidade total com o contrato JSON do legado em Python.
+Prova de Conceito (PoC) para evoluir o serviço WebSocket desenvolvido em **.NET 8**, agora com **entrega UNICAST por usuário autenticado**, **autenticação JWT via Header Authorization**, e **rastreabilidade aprimorada** com `TraceId` e integração nativa ao **Elastic APM**. Mantém compatibilidade total com o contrato JSON legado em Python.
 
 ---
 
-## Objetivo
+## Objetivos
 
-- Adicionar autenticação JWT nas conexões WebSocket.  
-- Implementar Redis como backplane para comunicação entre múltiplas instâncias.  
-- Expor métricas operacionais e registros de entrega via endpoints dedicados.  
-- Permitir rastreabilidade ponta a ponta com `TraceId` e integração com Elastic APM.  
-- Validar isolamento de mensagens por canal (`subscriptions`) usando tokens diferentes.  
+- Implementar **entrega UNICAST** com base no campo `target_user_id`.
+- Priorizar **autenticação JWT** via Header Authorization (mantendo `?token=` como fallback).
+- Manter **compatibilidade com o contrato JSON original**.
+- Garantir **isolamento completo de mensagens** por usuário e canal.
+- Melhorar **rastreabilidade e observabilidade** via Elastic APM e logs estruturados.
 
 ---
 
 ## Requisitos
 
-- .NET SDK 8.0+  
-- Linux, macOS ou Windows  
-- Redis (opcional — modo local ou via Docker)  
-- cURL e `jq` (para testes HTTP)  
+- .NET SDK 8.0+
+- Linux, macOS ou Windows
+- Redis (opcional, como backplane)
+- `curl` e `jq` (para testes HTTP)
 - `websocat` ou `wscat` (para testes WebSocket)
 
 ---
 
 ## Estrutura do Projeto
 
-```
-AppPlatformWebSocket_v2/
+```bash
+AppPlatformWebSocket_MVP/
 ├── Program.cs
 ├── Models/
+│   ├── PublishMessage.cs
 │   ├── ClientAck.cs
-│   └── PublishMessage.cs
+│   └── DeliveryRecord.cs
 ├── Services/
 │   ├── WebSocketDispatcher.cs
 │   ├── WebSocketConnectionManager.cs
-│   ├── RedisService.cs
-│   ├── DeliveryRecord.cs
-│   ├── ClientAckStore.cs
 │   ├── JwtValidator.cs
+│   ├── RedisService.cs
 │   ├── MetricsService.cs
-│   └── DeliveryStore.cs
+│   ├── DeliveryStore.cs
+│   ├── DiagnosticsHelper.cs
+│   └── ClientAckStore.cs
 ├── appsettings.json
-├── gitignore
-└── README.md
+└── Documento_Arquitetural_WebSocket_v3.docx
 ```
 
 ---
 
-## Execução local
+## Execução Local
 
 ```bash
 dotnet restore
@@ -58,37 +56,47 @@ dotnet build
 dotnet run
 ```
 
-O servidor iniciará (por padrão) em `http://localhost:5087`.
+O servidor iniciará por padrão em:
+
+```
+http://localhost:5087
+```
 
 ---
 
-## Endpoints disponíveis
+## Endpoints Disponíveis
 
-| Método | Endpoint        | Descrição                                                                 |
-|-------:|-----------------|---------------------------------------------------------------------------|
-|   POST | `/v1/publish`   | Publica mensagem no canal especificado                                   |
-|     WS | `/ws?token=JWT` | Conecta cliente autenticado por JWT; envia/recebe mensagens em tempo real |
-|    GET | `/metrics`      | Exibe métricas operacionais do serviço                                   |
-|    GET | `/deliveries`   | Lista registros de entregas realizadas                                   |
-|    GET | `/acks`         | Exibe confirmações (ACK) recebidas dos clientes                          |
-|    GET | `/clients`      | Lista conexões WebSocket ativas e seus claims                            |
-|    GET | `/swagger`      | Interface Swagger para testes e documentação                             |
+| Método | Endpoint | Descrição |
+|---------|-----------|--------------|
+| **POST** | `/v1/publish` | Publica mensagem (unicast se `target_user_id` presente, senão broadcast). |
+| **WS** | `/ws` | Conecta cliente autenticado via Header Authorization (JWT) ou `?token=`. |
+| **GET** | `/metrics` | Exibe métricas operacionais do serviço. |
+| **GET** | `/deliveries` | Lista registros de entregas realizadas. |
+| **GET** | `/acks` | Exibe confirmações (ACKs) recebidas dos clientes. |
+| **GET** | `/clients` | Lista conexões WebSocket ativas e suas claims. |
+| **GET** | `/swagger` | Interface Swagger para testes e documentação. |
 
 ---
 
-## Exemplo de autenticação JWT
+## Autenticação JWT
 
-O cliente deve se conectar com o token JWT na querystring:
+A autenticação é feita **prioritariamente via Header Authorization**, conforme o padrão:
+
+```bash
+websocat -H "Authorization: Bearer <JWT>" ws://localhost:5087/ws
+```
+
+Caso o header não esteja presente, é utilizado o fallback via querystring:
 
 ```bash
 websocat "ws://localhost:5087/ws?token=<JWT>"
 ```
 
-**Token exemplo (usuário com acesso aos canais `chat` e `user-events`):**
+### Exemplo de Payload JWT
 
 ```json
 {
-  "sub": "user-123",
+  "sub": "a123",
   "role": "client",
   "subscriptions": ["chat", "user-events"],
   "iss": "https://issuer.example.com",
@@ -97,11 +105,13 @@ websocat "ws://localhost:5087/ws?token=<JWT>"
 }
 ```
 
+A claim `sub` é usada para identificar e vincular conexões de um mesmo usuário.
+
 ---
 
-## Estrutura JSON obrigatória para o endpoint `/v1/publish`
+## Contrato JSON do Endpoint `/v1/publish`
 
-Toda requisição válida deve seguir este formato (alterando apenas os valores):
+Contrato mantido **100% compatível com o legado em Python**:
 
 ```json
 {
@@ -115,123 +125,120 @@ Toda requisição válida deve seguir este formato (alterando apenas os valores)
 }
 ```
 
-Observações:
-- `data` é uma string Base64.  
-- `publish_time` usa formato ISO 8601 UTC.  
-- `subscription` indica o canal (ex.: `chat`, `user-events`, `monitoring`).  
-
 ---
 
-## Exemplos completos de mensagens
+## Exemplos de Mensagens
 
-### 1) Mensagem no canal “chat”
+### Broadcast (canal `chat`)
 ```json
 {
   "message": {
     "data": "Q2hhbm5lbCBjaGF0",
     "message_id": "msg-chat-001",
-    "publish_time": "2025-10-26T12:00:00Z",
+    "publish_time": "2025-10-27T12:00:00Z",
     "body": {
       "event": "chat_message",
       "sender": "user123",
-      "text": "Mensagem exclusiva do canal chat"
+      "text": "Mensagem broadcast no canal chat"
     }
   },
   "subscription": "chat"
 }
 ```
 
-### 2) Mensagem no canal “user-events”
+### Unicast (somente `a123` recebe)
 ```json
 {
   "message": {
-    "data": "dXNlciBsb2dpbg==",
-    "message_id": "msg-user-001",
-    "publish_time": "2025-10-26T12:02:00Z",
+    "data": "VXNlcg==",
+    "message_id": "msg-uni-005",
+    "publish_time": "2025-10-27T23:15:00Z",
     "body": {
-      "event": "user_login",
-      "user_id": "u456",
-      "platform": "mobile"
+      "event": "private_notice",
+      "text": "Somente o usuário A deve receber esta mensagem."
     }
   },
-  "subscription": "user-events"
-}
-```
-
-### 3) Mensagem com ACK (canal chat)
-```json
-{
-  "message": {
-    "data": "YWNrbWVzc2FnZQ==",
-    "message_id": "msg-ack-01",
-    "publish_time": "2025-10-26T12:15:00Z",
-    "body": {
-      "event": "requires_ack",
-      "description": "Mensagem que exige confirmação"
-    }
-  },
-  "subscription": "chat"
+  "subscription": "user-events",
+  "target_user_id": "a123"
 }
 ```
 
 ---
 
-## Exemplo de resposta do endpoint `/metrics`
+## Testes Rápidos
+
+### Broadcast
+```bash
+curl -s -X POST http://localhost:5087/v1/publish \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN_A>" \
+  -d '{"message":{"data":"Q2hhbm5lbCBjaGF0","message_id":"msg-chat-001","publish_time":"2025-10-27T12:00:00Z","body":{"event":"chat_message","sender":"user123","text":"Mensagem broadcast"}}, "subscription":"chat"}'
+```
+
+### Unicast
+```bash
+curl -s -X POST http://localhost:5087/v1/publish \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN_A>" \
+  -d '{"message":{"data":"VXNlcg==","message_id":"msg-uni-006","publish_time":"2025-10-27T16:30:00Z","body":{"event":"personal_notification","text":"Teste unicast final!"}}, "subscription":"user-events","target_user_id":"a123"}'
+```
+
+**Resultado esperado:**
+- HTTP 200 OK
+- `status: "sent-unicast"`
+- Mensagem recebida apenas pelo WebSocket do usuário `a123`.
+
+---
+
+## Exemplo de Métricas
 
 ```bash
 curl http://localhost:5087/metrics | jq .
 ```
 
-Resposta esperada:
 ```json
 {
   "activeConnections": 2,
-  "messagesBroadcasted": 7,
+  "messagesBroadcasted": 5,
   "publishRequests": 7,
-  "timestamp": "2025-10-26T14:20:00Z"
+  "timestamp": "2025-10-27T23:00:00Z"
 }
 ```
 
 ---
 
-## Observabilidade e rastreabilidade (TraceId)
+## Logs e Observabilidade
 
-- Cada publicação gera ou propaga um campo `TraceId`.  
-- Logs e spans podem ser coletados via Elastic APM.  
-- O endpoint `/deliveries` registra cada mensagem entregue:  
-  ```json
-  {
-    "connectionId": "a1b2c3d4e5",
-    "messageId": "msg-chat-001",
-    "deliveredAtUtc": "2025-10-26T14:20:11Z"
-  }
-  ```
+- A claim `sub` é usada diretamente para identificar o usuário.
+- Logs incluem `traceId`, `target_user_id` e `message_id`.
+- `/clients` exibe conexões ativas e claims completas.
+- Integração nativa com **Elastic APM** e logs estruturados JSON.
 
 ---
 
 ## Riscos e Mitigações
 
 | Risco | Impacto | Mitigação |
-|-------|----------|-----------|
-| Redis fora do ar | Mensagens não replicadas entre instâncias | Fallback local e retry automático |
-| JWT inválido | Falha na autenticação | Gerar tokens válidos com mesmo segredo do servidor |
-| Alta carga simultânea | Possível degradação de desempenho | Ajustar thread pool e buffers WebSocket |
-| Logs não centralizados | Dificuldade de diagnóstico | Integrar Elastic APM e centralizar observabilidade |
+|--------|----------|-------------|
+| JWT inválido ou expirado | Conexão rejeitada (401) | Validação com tolerância (ClockSkew 30s) |
+| Claim `sub` ausente | Usuário não identificado | Token rejeitado no handshake |
+| Redis indisponível | Sem replicção entre instâncias | Fallback local automático |
+| JSON inválido | Erro no /publish | Validação antes do envio |
 
 ---
 
-## Observações Finais
+## Resumo Técnico
 
-- O contrato JSON foi mantido conforme o legado em Python.  
-- Redis é essencial para escalabilidade horizontal.  
-- JWT garante isolamento de mensagens por canal (`subscriptions`).  
-- `/metrics`, `/deliveries`, `/acks` e `/clients` oferecem visibilidade operacional.  
-- A PoC está pronta para ambiente **staging** e migração futura para produção.
+- **UNICAST funcional** — entrega exclusiva ao usuário via `target_user_id`  
+- **JWT via Header Authorization** — autenticação segura e padronizada  
+- **Contrato JSON mantido** — compatível com legado em Python  
+- **Logs e métricas expostos** — rastreabilidade ponta a ponta  
+- **Base pronta para MVP** — escalabilidade e integração futura com provedores JWT  
 
 ---
 
 ## Autor
 
 **Wanderson Ferreira da Silva**  
-Arquiteto  
+Arquiteto de Soluções  
 Outubro/2025

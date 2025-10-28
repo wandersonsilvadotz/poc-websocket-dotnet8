@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "WNJwk2FiUzflBWd726KfJNW4RkciPGY0uLeRcI+iQvKidDWIOvJf0mCoFET1yvV1A5Gl1+EMy2pTK9lQ3HZc3w==",
+  "dgSpecHash": "txMUJKTmQsFG5iqbIfEwcJpEskSwZwbawfZGocRTxApLBriS8PRmk7Ieb0vwyMX2Kx/Dt4Ivev3AxyFHooSCnQ==",
   "success": true,
-  "projectFilePath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/AppPlatformWebSocket.csproj",
+  "projectFilePath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v3/AppPlatformWebSocket.csproj",
   "expectedPackageFiles": [
     "/home/wanderson-silva/.nuget/packages/dnsclient/1.6.1/dnsclient.1.6.1.nupkg.sha512",
     "/home/wanderson-silva/.nuget/packages/elastic.apm/1.34.1/elastic.apm.1.34.1.nupkg.sha512",

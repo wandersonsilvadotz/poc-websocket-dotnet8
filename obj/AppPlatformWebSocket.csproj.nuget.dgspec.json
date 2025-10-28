@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/AppPlatformWebSocket.csproj": {}
+    "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v3/AppPlatformWebSocket.csproj": {}
   },
   "projects": {
-    "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/AppPlatformWebSocket.csproj": {
+    "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v3/AppPlatformWebSocket.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/AppPlatformWebSocket.csproj",
+        "projectUniqueName": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v3/AppPlatformWebSocket.csproj",
         "projectName": "AppPlatformWebSocket",
-        "projectPath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/AppPlatformWebSocket.csproj",
+        "projectPath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v3/AppPlatformWebSocket.csproj",
         "packagesPath": "/home/wanderson-silva/.nuget/packages/",
-        "outputPath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v2/obj/",
+        "outputPath": "/home/wanderson-silva/websocket-poc/AppPlatformWebSocket_v3/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/wanderson-silva/.nuget/NuGet/NuGet.Config"

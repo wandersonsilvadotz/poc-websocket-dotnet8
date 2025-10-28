@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using AppPlatformWebSocket.Models;
 using AppPlatformWebSocket.Services;
+using System.Security.Claims;
 using Elastic.Apm.NetCoreAll; // requer Elastic.Apm.NetCoreAll
 
 
@@ -66,10 +67,10 @@ var redis = app.Services.GetRequiredService<RedisService>();
 var connMgr = app.Services.GetRequiredService<WebSocketConnectionManager>();
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
-// Endpoint WebSocket com validação JWT
+// Endpoint WebSocket com validação JWT (Header prioritário + fallback query)
 app.Map("/ws", async (HttpContext context) =>
 {
-    // Suporta token via query ?token=... ou header Authorization: Bearer ...
+    // Prioriza Header Authorization: Bearer <token>
     if (!jwtValidator.TryValidateFromHttpContext(context, out var principal, out var error))
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -77,17 +78,24 @@ app.Map("/ws", async (HttpContext context) =>
         return;
     }
 
+    // Verifica se é uma requisição WS válida
     if (!context.WebSockets.IsWebSocketRequest)
     {
         context.Response.StatusCode = 400;
         return;
     }
 
+    // Extrai o userId da claim "sub" (padrão JWT)
+    // Extrai o userId corretamente (compatível com "sub" e NameIdentifier)
+    var userId = principal?.FindFirst("sub")?.Value
+                ?? principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
     var socket = await context.WebSockets.AcceptWebSocketAsync();
-    var id = connMgr.AddSocket(socket, principal);
+    var id = connMgr.AddSocket(socket, principal, userId);
 
     metrics.IncrementActiveConnections();
-    logger.LogInformation("Nova conexão aceita: {Id} | Ativas: {Active}", id, metrics.ActiveConnections);
+    logger.LogInformation("Nova conexão aceita: {ConnId} (userId={UserId}) | Ativas: {Active}",
+        id, userId, metrics.ActiveConnections);
 
     var buffer = new byte[4 * 1024];
     try
@@ -95,76 +103,85 @@ app.Map("/ws", async (HttpContext context) =>
         while (socket.State == WebSocketState.Open)
         {
             var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+
+            // Recebimento de mensagens do cliente (ex: ACK)
             if (result.MessageType == WebSocketMessageType.Text)
-{
-    var json = Encoding.UTF8.GetString(buffer, 0, result.Count);
-    try
-    {
-        using var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.TryGetProperty("ack", out var ackProp))
-        {
-            var msgId = ackProp.GetString() ?? string.Empty;
-            app.Services.GetRequiredService<ClientAckStore>()
-               .Add(new AppPlatformWebSocket.Models.ClientAck(id, msgId, DateTime.UtcNow));
-        }
-        // Caso queira processar outros comandos do cliente, trate aqui.
-    }
-    catch { /* ignore parsing errors for non-ack messages */ }
-}
-else if (result.MessageType == WebSocketMessageType.Close)
-{
-    await connMgr.RemoveSocketAsync(id);
-    metrics.DecrementActiveConnections();
-    logger.LogInformation("Conexão encerrada: {Id} | Ativas: {Active}", id, metrics.ActiveConnections);
-    break;
-}
+            {
+                var json = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("ack", out var ackProp))
+                    {
+                        var msgId = ackProp.GetString() ?? string.Empty;
+                        app.Services.GetRequiredService<ClientAckStore>()
+                            .Add(new AppPlatformWebSocket.Models.ClientAck(id, msgId, DateTime.UtcNow));
+                    }
+                }
+                catch
+                {
+                    // ignora mensagens não reconhecidas
+                }
+            }
+            else if (result.MessageType == WebSocketMessageType.Close)
+            {
+                await connMgr.RemoveSocketAsync(id);
+                metrics.DecrementActiveConnections();
+                logger.LogInformation("Conexão encerrada: {ConnId} (userId={UserId}) | Ativas: {Active}",
+                    id, userId, metrics.ActiveConnections);
+                break;
+            }
         }
     }
     catch (Exception ex)
     {
         await connMgr.RemoveSocketAsync(id);
         metrics.DecrementActiveConnections();
-        logger.LogWarning(ex, "Erro no socket {Id}. Conexão removida. Ativas: {Active}", id, metrics.ActiveConnections);
+        logger.LogWarning(ex, "Erro no socket {ConnId} (userId={UserId}). Conexão removida. Ativas: {Active}",
+            id, userId, metrics.ActiveConnections);
     }
 });
 
-// Endpoint HTTP de publicação
-app.MapPost("/v1/publish", async (PublishMessage msg, ILogger<Program> log) =>
+
+// Endpoint HTTP de publicação (unicast + broadcast)
+app.MapPost("/v1/publish", async (PublishMessage msg, WebSocketDispatcher dispatcher, ILogger<Program> log, MetricsService metrics) =>
 {
-
     metrics.IncrementPublishRequests();
-    
-    // Captura o TraceId atual do APM (se disponível)
-    var traceId = Elastic.Apm.Agent.Tracer.CurrentTransaction?.TraceId;
-    msg.TraceId ??= traceId; // Só preenche se ainda não existir no payload
+    msg.TraceId ??= Guid.NewGuid().ToString("N");
 
-    // Se Redis estiver habilitado, publica no canal para espalhar entre as instâncias
-    if (redis.IsEnabled)
+    if (!string.IsNullOrWhiteSpace(msg.TargetUserId))
     {
-        await redis.PublishAsync(msg);
-        log.LogInformation("Mensagem publicada no Redis: {MessageId}", msg.Message?.MessageId);
-    }
-    else
-    {
+        await dispatcher.SendToUserAsync(msg.TargetUserId, msg);
+        log.LogInformation("Unicast enviado para userId={UserId} (messageId={MessageId}, traceId={TraceId})",
+            msg.TargetUserId, msg.Message?.MessageId, msg.TraceId);
 
-        
-        // Fallback local (single instance)
-        await dispatcher.BroadcastAsync(msg);
-log.LogInformation("Broadcast concluído: {MessageId} {Subscription} trace={TraceId}",
-    msg.Message?.MessageId, msg.Subscription, msg.TraceId);
+        return Results.Ok(new
+        {
+            status = "sent-unicast",
+            targetUserId = msg.TargetUserId,
+            messageId = msg.Message?.MessageId,
+            traceId = msg.TraceId
+        });
     }
+
+    await dispatcher.BroadcastAsync(msg);
+    log.LogInformation("Broadcast enviado (subscription={Subscription}, messageId={MessageId}, traceId={TraceId})",
+        msg.Subscription, msg.Message?.MessageId, msg.TraceId);
 
     metrics.IncrementMessagesBroadcasted();
     return Results.Ok(new
     {
-        status = "sent",
+        status = "sent-broadcast",
+        subscription = msg.Subscription,
+        messageId = msg.Message?.MessageId,
+        traceId = msg.TraceId,
         totalMessages = metrics.MessagesBroadcasted,
         activeConnections = metrics.ActiveConnections
     });
-    
-})
+});
 
-.WithName("Publish");
+
+
 
 // Endpoint de métricas
 app.MapGet("/metrics", () =>

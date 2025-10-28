@@ -1,0 +1,118 @@
+# 1) Criar app console do .NET
+dotnet new console -n jwt-gen -o jwt-gen --force
+
+# 2) Gravar o Program.cs (gera JWT com claims de "subscriptions")
+cat <<'EOF' > jwt-gen/Program.cs
+using System;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.IdentityModel.Tokens;
+using System.Collections.Generic;
+
+// =========================
+// Configurações (padrões)
+// =========================
+// Pode sobrescrever via argumentos (--issuer, --audience, --secret, --user, --subs)
+// ou variáveis de ambiente: JWT_ISSUER, JWT_AUDIENCE, JWT_SECRET, JWT_USER, JWT_SUBS
+
+string issuer  = Environment.GetEnvironmentVariable("JWT_ISSUER")  ?? "https://issuer.example.com";
+string audience= Environment.GetEnvironmentVariable("JWT_AUDIENCE")?? "app-client";
+string secret  = Environment.GetEnvironmentVariable("JWT_SECRET")  ?? "trocar-por-uma-chave-secreta-com-no-minimo-32-caracteres";
+
+// =========================
+// CLI args (opcionais)
+// =========================
+// Ex.: dotnet run -- --user user-123 --subs chat,user-events --issuer https://idp --audience app --secret SEGURO...
+for (int i = 0; i < args.Length; i++)
+{
+    switch (args[i])
+    {
+        case "--issuer":   issuer   = args[++i]; break;
+        case "--audience": audience = args[++i]; break;
+        case "--secret":   secret   = args[++i]; break;
+        case "--user":     Environment.SetEnvironmentVariable("JWT_USER", args[++i]); break;
+        case "--subs":     Environment.SetEnvironmentVariable("JWT_SUBS", args[++i]); break;
+    }
+}
+
+// =========================
+// Entrada de dados
+// =========================
+string userId = Environment.GetEnvironmentVariable("JWT_USER") ?? "";
+string subsCsv = Environment.GetEnvironmentVariable("JWT_SUBS") ?? "";
+
+if (string.IsNullOrWhiteSpace(userId))
+{
+    Console.Write("Informe o ID do usuário (ex: user-123): ");
+    userId = Console.ReadLine()?.Trim() ?? "user-123";
+}
+
+if (string.IsNullOrWhiteSpace(subsCsv))
+{
+    Console.Write("Informe os canais (subscriptions) separados por vírgula (ex: chat,user-events): ");
+    subsCsv = Console.ReadLine()?.Trim() ?? "chat";
+}
+
+string[] subscriptions = subsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+// =========================
+// Construção das claims
+// =========================
+var claims = new List<Claim>
+{
+    new Claim(JwtRegisteredClaimNames.Sub, userId),
+    new Claim("role", "client"),
+    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+};
+
+// Uma claim "subscriptions" para cada canal
+foreach (var sub in subscriptions)
+{
+    claims.Add(new Claim("subscriptions", sub));
+}
+
+// =========================
+// Geração do token
+// =========================
+if (secret.Length < 32)
+{
+    Console.Error.WriteLine("ERRO: A chave secreta precisa ter pelo menos 32 caracteres. Ajuste o 'secret'.");
+    Environment.Exit(1);
+}
+
+var key   = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
+var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+var token = new JwtSecurityToken(
+    issuer: issuer,
+    audience: audience,
+    claims: claims,
+    notBefore: DateTime.UtcNow.AddSeconds(-5),
+    expires: DateTime.UtcNow.AddHours(3600),
+    signingCredentials: creds
+);
+
+// =========================
+string jwt = new JwtSecurityTokenHandler().WriteToken(token);
+
+// Saída
+Console.WriteLine("\n===============================");
+Console.WriteLine("JWT GERADO COM SUCESSO!");
+Console.WriteLine("===============================\n");
+Console.WriteLine(jwt);
+Console.WriteLine("\n--- DADOS ---");
+Console.WriteLine($"Usuário: {userId}");
+Console.WriteLine($"Canais: {string.Join(", ", subscriptions)}");
+Console.WriteLine($"Issuer: {issuer}");
+Console.WriteLine($"Audience: {audience}");
+Console.WriteLine($"Expira em: {token.ValidTo:u}");
+EOF
+
+# 3) Entrar na pasta e instalar dependência
+cd jwt-gen
+dotnet add package System.IdentityModel.Tokens.Jwt
+
+# 4) Rodar (modo interativo)
+dotnet run
+
